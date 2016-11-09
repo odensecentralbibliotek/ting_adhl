@@ -126,7 +126,7 @@ function ting_adhl_render_cover($covers ) {
     // Set default page result.
   $content = array(
     '#theme' => 'covers_search_result',
-    '#title' => t('Anbefalinger'),
+    '#title' => t('Andre har også lånt:'),
 
   );
 
