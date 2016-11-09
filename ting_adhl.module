@@ -1,0 +1,289 @@
+<?php
+/**
+ * @file
+ * Enables the ADHL services to ding2 sites.
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function ting_adhl_menu() {
+  $items = array();
+
+  $items['ting/adhl/ajax'] = array(
+    'title' => 'Get ADHL recommedation',
+    'page callback' => 'ting_adhl_get_recommendations',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  $items['ting/adhl/top'] = array(
+    'title' => 'Get ADHL recommedation',
+    'page callback' => 'ting_adhl_get_top_recommendations',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+
+/**
+ * Implements hook_theme().
+ */
+function ting_adhl_theme($existing, $type, $theme, $path)  {
+  return array(
+    'covers_search_result' => array(
+      'variables' => array('title' => '', 'results' => array()),
+      'template' => 'covers-search-result',
+      'path' => $path . '/templates',
+    ),
+    'ting_adhl_recommendation_list_entry' => array(
+      'variables' => array('item' => NULL),
+      'template' => 'templates/ting_adhl_recommendation_list_entry',
+    ),
+  );
+}
+
+/**
+ * Implements hook_preprocess().
+ *
+ * Default implementation of preprocess function for ting_adhl_recommendation_list_entry
+ * theme function.
+ */
+function template_preprocess_ting_adhl_recommendation_list_entry(&$vars) {
+  $item = $vars['item'];
+
+  // Build string with the creators.
+  $creators = FALSE;
+  if (!empty($item->creators)) {
+    $creators = implode(", ", $item->creators);
+  }
+  $vars['creators'] = $creators;
+
+  // Create link and title back to the ting object.
+  $uri = entity_uri("ting_object", $item);
+  $vars['link'] = array(
+    'uri' => url($uri['path']),
+    'title' => $item->title . ($creators ? ': ' . $creators : ''),
+  );
+}
+
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ *
+ * Tells CTools (and thus Panels) where to look for plugin code.
+ */
+function ting_adhl_ctools_plugin_directory($module, $plugin) {
+  if ($module == 'ctools' || $module == 'panels') {
+    return 'plugins/' . $plugin;
+  }
+}
+
+function ting_adhl_get_top_recommendations() {
+  $output = '';
+  $top_recommendations = variable_get('ting_adhl_top_recommendations');
+  if ($top_recommendations) {
+    $output = ting_adhl_render_cover($top_recommendations);
+  }
+  return drupal_json_output($output);
+}
+
+function ting_adhl_get_recommendations() {
+  $object_id = $_POST['objectId'];
+  $output = '';
+  if ($object_id) {
+    $adhl_recommendations = ting_adhl_recommendations($object_id, 15);
+    if (is_array($adhl_recommendations) && !empty($adhl_recommendations)) {
+      $covers = ting_adhl_check_covers($adhl_recommendations, 10);
+      if (!empty($covers))
+        $output = ting_adhl_render_cover($covers);
+        ting_adhl_save_top_recommendation($covers);
+        ting_adhl_set_cache($covers, $object_id);
+    }
+  }
+  return drupal_json_output($output);
+}
+
+function ting_adhl_render_cover($covers ) {
+  $results = array();
+
+  foreach ($covers as $object) {
+    if ($object) {
+      $alt = $object->title;
+      $path = ting_covers_object_path($object->localId);
+      $image =  theme('image_style', array('style_name' => 'ding_large', 'path' => $path , 'alt' => $alt));
+      $options = array(
+        'html' => TRUE,
+        'attributes' => array('title' => $object->title),
+      );    
+      $ownerId =  '746100';
+      $uri = 'ting/collection/' . $ownerId . ':' . $object->localId;
+      $results[] = array(
+        'snippet' => l($image, $uri, $options)
+      );
+    }
+  }
+    // Set default page result.
+  $content = array(
+    '#theme' => 'covers_search_result',
+    '#title' => t('Anbefalinger'),
+
+  );
+
+  // If any search result have been found add them to the array.
+  if (!empty($results)) {
+    $content['#results'] = $results;
+//    array(
+//      '#theme' => 'covers_search_results',
+//      '#results' => $results,
+//    );
+  }  
+
+  return drupal_render($content);
+}
+
+
+/**
+ * Get recommendations for a given Faustnr.
+ *
+ * @param string $faust
+ *  Faust number to get recommendations from.
+ * @param $numResults
+ *  The number of results to return.
+ * @return array
+ *  An array of TingClientObjectRecommendation objects.
+ */
+function ting_adhl_recommendations($faust, $numResults = 10) {
+  module_load_include('client.inc', 'ting');
+  $request = ting_get_request_factory()->getObjectRecommendationRequest();
+  $request->setFaust($faust);
+  $request->setNumResults($numResults);
+  $response = ting_get_client()->execute($request);
+  return $response;
+}
+
+function ting_adhl_save_top_recommendation($covers) {
+  $number_of_top_recommendations = 40;
+  $key = array_rand($covers);
+  $object = $covers[$key];
+  $top_recommendations = variable_get('ting_adhl_top_recommendations');
+  if (!$top_recommendations) {
+    $top_recommendations = array();
+  }
+  $found = FALSE;
+  foreach ($top_recommendations as $object_key => $top_object) {
+    if (is_object($top_object) && is_object($object) && $top_object->localId == $object->localId) {
+      unset($top_recommendations[$object_key]);
+      $found = TRUE;
+      break;
+    }
+  }
+  if (!$found && count($top_recommendations)>= $number_of_top_recommendations) {
+    array_shift($top_recommendations);   
+  }
+  $top_recommendations[] = $object;
+  variable_set('ting_adhl_top_recommendations',$top_recommendations);
+}
+
+function ting_adhl_check_local_covers($covers_ids) {
+  $result_ids = array();
+  foreach ($covers_ids as $cover_id) {
+    if ($cover_id && isset($cover_id->localId)) {
+      $path = ting_covers_object_path($cover_id->localId);
+
+      if (file_exists($path)) {
+        $result_ids[$cover_id->localId] = $cover_id;
+      }
+    }
+  }
+  return $result_ids;
+}
+
+function ting_adhl_check_covers($covers_ids, $number_of_results) {
+  $result_ids = array();
+  $missing_images_local_ids = array();
+
+  foreach ($covers_ids as $cover_id) {
+    // Determine if the local id is a known negative.
+    if (cache_get('ting_covers:' . $cover_id->localId, FALSE)) {
+      continue;
+    }
+
+    $path = ting_covers_object_path($cover_id->localId);
+    if (file_exists($path)) {
+      $result_ids[$cover_id->localId] = $cover_id;
+    } else {
+      $missing_images_local_ids[] = (object) array(
+          'localIdentifier' => $cover_id->localId,
+          'libraryCode' => '746100',
+          'object' => $cover_id
+      );
+    }
+    if (count($result_ids) >= $number_of_results) {
+      return $result_ids;
+    }
+  }
+  $service = new AdditionalInformationService(variable_get('addi_wsdl_url'), variable_get('addi_username'), variable_get('addi_group'), variable_get('addi_password'));
+  // Local ids = Faust numbers. Library object identifiers can be confusing.
+  $additional_informations = $service->getByLocalIdentifier($missing_images_local_ids);
+
+  foreach ($missing_images_local_ids as $local_id) {
+    if (isset($additional_informations[$local_id->localIdentifier]) && $ai = $additional_informations[$local_id->localIdentifier]) {
+      if ($ai->detailUrl) {
+        $result_ids[$local_id->localIdentifier] = $local_id->object;
+        ting_adhl_fetch_image(ting_covers_object_path($local_id->localIdentifier), $ai->detailUrl);
+      } else if ($ai->thumbnailUrl) {
+        $result_ids[$local_id->localIdentifier] = $local_id->object;
+        ting_adhl_fetch_image(ting_covers_object_path($local_id->localIdentifier), $ai->thumbnailUrl);
+      }
+      if (count($result_ids) >= $number_of_results) {
+        break;
+      }
+    }
+  }
+  return $result_ids;
+}
+
+/**
+ * Sets a cached block of inpiration list in desired format.
+ */
+function ting_adhl_set_cache($covers, $object_id) {  
+   // Save cache for a week.
+   cache_set('ting-adhl-cache-' . $object_id, $covers, 'cache', time() + variable_get('ting_adhl_cache_lifetime',604800));
+}
+
+/**
+ * Helper function to fetch and save a cover image file.
+ *
+ * @see image_style_create_derivative()
+ *
+ * @param string $filename
+ *    File name, including its path within Drupal's file folder.
+ * @param string $image_url
+ *    URL for the source image file.
+ * @return mixed
+ *    A file object or FALSE on error.
+ */
+function ting_adhl_fetch_image($filename, $image_url) {
+  $result = drupal_http_request($image_url);
+
+  //Bail if the HTTP request failed
+  if ($result->code != 200) {
+    return FALSE;
+  }
+
+  // Get the folder for the final location of this preset...
+  $directory = dirname($filename);
+
+  // Build the destination folder tree if it doesn't already exist.
+  if (!file_prepare_directory($directory, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS)) {
+    watchdog('ting_covers', 'Failed to create directory: %directory', array('%directory' => $directory), WATCHDOG_ERROR);
+    return FALSE;
+  }
+
+  return file_unmanaged_save_data($result->data, $filename, FILE_EXISTS_REPLACE);
+}
+
+
+
+
