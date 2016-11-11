@@ -116,7 +116,7 @@ function ting_adhl_render_cover($covers ) {
         'html' => TRUE,
         'attributes' => array('title' => $object->title),
       );    
-      $ownerId =  '746100';
+      $ownerId =  variable_get('ting_agency');
       $uri = 'ting/collection/' . $ownerId . ':' . $object->localId;
       $results[] = array(
         'snippet' => l($image, $uri, $options)
@@ -215,7 +215,7 @@ function ting_adhl_check_covers($covers_ids, $number_of_results) {
     } else {
       $missing_images_local_ids[] = (object) array(
           'localIdentifier' => $cover_id->localId,
-          'libraryCode' => '746100',
+          'libraryCode' => variable_get('ting_agency'),
           'object' => $cover_id
       );
     }
