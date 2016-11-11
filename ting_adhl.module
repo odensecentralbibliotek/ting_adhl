@@ -116,7 +116,7 @@ function ting_adhl_render_cover($covers ) {
         'html' => TRUE,
         'attributes' => array('title' => $object->title),
       );    
-      $ownerId =  ding_provider_build_entity_id($object->localId, variable_get('ting_agency', -1));
+      $ownerId =  ding_provider_build_entity_id($object->localId, variable_get('ting_agency'));
       $uri = 'ting/collection/' . $ownerId;
       $results[] = array(
         'snippet' => l($image, $uri, $options)
