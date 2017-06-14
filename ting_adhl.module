@@ -159,6 +159,34 @@ function ting_adhl_recommendations($faust, $numResults = 10) {
   $request->setFaust($faust);
   $request->setNumResults($numResults);
   $response = ting_get_client()->execute($request);
+  /*
+   * Verify that the ids are actuly available in the datawell
+   */
+  $id_list = array();
+  foreach($response as $key => $object)
+  {
+      $test = $object->localId;
+      array_push($id_list,ding_provider_build_entity_id($test));
+  }
+  $well_objects = ting_get_objects($id_list);
+  $loop_data = $response;
+  foreach($loop_data as $key => $object)
+  {
+      $found = false;
+      foreach($well_objects as $well_obj)
+      {
+          if($well_obj->localId == $object->localId)
+          {
+              $found = true;
+              break;
+          }
+      }
+      if($found == false)
+      {
+          //unset($response[$key]);
+          array_splice($response,$key,1);
+      }
+  }
   return $response;
 }
 
