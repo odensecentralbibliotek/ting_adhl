@@ -175,7 +175,7 @@ function ting_adhl_recommendations($faust, $numResults = 10) {
       $found = false;
       foreach($well_objects as $well_obj)
       {
-          if($well_obj->localId == $object->localId)
+          if($well_obj != null && $well_obj->localId == $object->localId)
           {
               $found = true;
               break;
