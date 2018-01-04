@@ -133,10 +133,10 @@ function ting_adhl_render_cover($covers ) {
   // If any search result have been found add them to the array.
   if (!empty($results)) {
     $content['#results'] = $results;
-//    array(
-//      '#theme' => 'covers_search_results',
-//      '#results' => $results,
-//    );
+    array(
+      '#theme' => 'covers_search_results',
+      '#results' => $results,
+    );
   }  
 
   return drupal_render($content);
@@ -170,24 +170,21 @@ function ting_adhl_recommendations($faust, $numResults = 10) {
   }
   $well_objects = ting_get_objects($id_list);
   $loop_data = $response;
+  $return_data = array();
   foreach($loop_data as $key => $object)
   {
       $found = false;
       foreach($well_objects as $well_obj)
       {
-          if($well_obj != null && $well_obj->localId == $object->localId)
+          if($well_obj->localId == $object->localId)
           {
+              array_push($return_data,$object);
               $found = true;
               break;
           }
       }
-      if($found == false)
-      {
-          //unset($response[$key]);
-          array_splice($response,$key,1);
-      }
   }
-  return $response;
+  return $return_data;
 }
 
 function ting_adhl_save_top_recommendation($covers) {
