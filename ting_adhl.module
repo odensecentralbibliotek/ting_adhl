@@ -111,7 +111,7 @@ function ting_adhl_render_cover($covers ) {
     if ($object) {
       $alt = $object->title;
       $path = ting_covers_object_path($object->localId);
-      $image =  theme('image_style', array('style_name' => 'ding_large', 'path' => $path , 'alt' => $alt));
+      $image =  theme('image_style', array('style_name' => 'ding_medium', 'path' => $path , 'alt' => $alt));
       $options = array(
         'html' => TRUE,
         'attributes' => array('title' => $object->title),
